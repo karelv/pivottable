@@ -426,6 +426,9 @@
       "Table": function(data, opts) {
         return pivotTableRenderer(data, opts);
       },
+      "Table Category": function(data, opts) {
+        return $(pivotTableRenderer(data, opts)).category_table(data, opts);
+      },
       "Table Barchart": function(data, opts) {
         return $(pivotTableRenderer(data, opts)).barchart();
       },
@@ -1738,6 +1741,90 @@
       heatmapper(".pvtTotal.colTotal");
       return this;
     };
+
+
+    /*
+    Category post-processing
+     */
+    $.fn.category_table = function(pivotData, opts) {
+      var colAttrs, colKeys, rowAttrs, rowKeys, table;
+
+      defaults = {
+        category_table:{
+          record_name: null,
+          categories: []
+        }
+      };
+      opts = $.extend(true, {}, defaults, opts);
+
+      colAttrs = pivotData.colAttrs;
+      rowAttrs = pivotData.rowAttrs;
+      rowKeys = pivotData.getRowKeys();
+      colKeys = pivotData.getColKeys();
+      table = this;
+
+      var getCellHandler = function(rowValues, colValues, row, col) {
+        var attr, filters, i;
+        filters = {};
+        for (i in colAttrs) {
+          if (!hasProp.call(colAttrs, i)) continue;
+          attr = colAttrs[i];
+          if (colValues[i] != null) {
+            filters[attr] = colValues[i];
+          }
+        }
+        for (i in rowAttrs) {
+          if (!hasProp.call(rowAttrs, i)) continue;
+          attr = rowAttrs[i];
+          if (rowValues[i] != null) {
+            filters[attr] = rowValues[i];
+          }
+        }
+
+        var categories = [];
+        var classes = []
+        pivotData.forEachMatchingRecord(filters, function(record) {
+          if (categories.indexOf(record[opts.category_table.record_name]) <= -1)
+          {
+            categories.push(record[opts.category_table.record_name]);
+          }
+        });
+        for (cat_i in opts.category_table.categories)
+        {
+          cat = opts.category_table.categories[cat_i];
+          i = categories.indexOf(cat);
+          if (i > -1)
+          {
+            classes.push(cat);
+            categories.splice(i, 1); // remove the element from categories.
+          }
+        }
+
+        var el = $(table).find (".pvtVal.row"+row+".col"+col);
+        for (class_i in classes)
+        {
+          classes[class_i].split(" ").forEach(function(el_class) {
+            el.addClass(opts.category_table.record_name+"-"+el_class);
+          });
+        }
+      };
+
+      // run the cell handler for each cell
+      if (opts.category_table.record_name != null)
+      {
+        for (i in rowKeys) {
+          if (!hasProp.call(rowKeys, i)) continue;
+          rowKey = rowKeys[i];
+          for (j in colKeys) {
+            if (!hasProp.call(colKeys, j)) continue;
+            colKey = colKeys[j];
+            getCellHandler(rowKey, colKey, i, j);
+          }
+        }
+      }
+      return this;
+    };
+
 
     /*
     Barchart post-processing
