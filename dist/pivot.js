@@ -641,6 +641,7 @@
         this.getColKeys = bind(this.getColKeys, this);
         this.sortKeys = bind(this.sortKeys, this);
         this.arrSort = bind(this.arrSort, this);
+        this.alterKeyOrder = opts.alterKeyOrder;
         this.input = input;
         this.aggregator = (ref = opts.aggregator) != null ? ref : aggregatorTemplates.count()();
         this.aggregatorName = (ref1 = opts.aggregatorName) != null ? ref1 : "Count";
@@ -798,7 +799,63 @@
               })(this));
               break;
             default:
-              this.rowKeys.sort(this.arrSort(this.rowAttrs));
+              var pivotData = this;
+              var alterKeyOrder = this.alterKeyOrder;
+              var rowAttrs = pivotData.rowAttrs;
+              var rowKeys = pivotData.getRowKeys();
+
+              var rowKeysAlter = [];
+              for (i in alterKeyOrder)
+              {
+                rowKeysAlter[i] = { altered_index: rowAttrs.indexOf(alterKeyOrder[i].key),
+                                    original_values: [],
+                                  };
+              }
+
+              var getRowUpdater = function(_rowValues, row) {
+                var attr, filters, i;
+                filters = {};
+                for (i in rowAttrs) {
+                  if (!hasProp.call(rowAttrs, i)) continue;
+                  attr = rowAttrs[i];
+                  if (_rowValues[i] != null) {
+                    filters[attr] = _rowValues[i];
+                  }
+                }
+
+                for (i in alterKeyOrder)
+                {
+                  if (rowKeysAlter[i].altered_index < 0) continue;
+                  var sum = 0;
+                  var record_count = 0;
+                  pivotData.forEachMatchingRecord(filters, function(record) {
+                    sum += parseInt(record[alterKeyOrder[i].value_key]);
+                    record_count++;
+                  });
+                  var row_i = parseInt(row);
+                  rowKeys[row_i].push(row_i);
+                  rowKeysAlter[i].original_values[row_i] = rowKeys[row_i][rowKeysAlter[i].altered_index];
+                  rowKeys[row_i][rowKeysAlter[i].altered_index] = (sum / record_count);
+                }
+              };
+
+              for (row in rowKeys)
+              {
+                getRowUpdater(rowKeys[row], row);
+              }
+              rowKeys.sort(this.arrSort(this.rowAttrs));
+
+              for (row in rowKeys)
+              {
+                var row_i = parseInt(row);
+                for (i = alterKeyOrder.length-1; i>=0; i--)
+                {
+                  if (rowKeysAlter[i].altered_index < 0) continue;
+                  var row_index = rowKeys[row_i].pop();
+                  rowKeys[row_i][rowKeysAlter[i].altered_index] = rowKeysAlter[i].original_values[row_index];
+                }
+              }
+              // return rowKeys;
           }
           switch (this.colOrder) {
             case "value_a_to_z":
@@ -814,7 +871,63 @@
                 };
               })(this));
             default:
-              return this.colKeys.sort(this.arrSort(this.colAttrs));
+              var pivotData = this;
+              var alterKeyOrder = this.alterKeyOrder;
+              var colAttrs = pivotData.colAttrs;
+              var colKeys = pivotData.getColKeys();
+
+              var colKeysAlter = [];
+              for (i in alterKeyOrder)
+              {
+                colKeysAlter[i] = { altered_index: colAttrs.indexOf(alterKeyOrder[i].key),
+                                    original_values: [],
+                                  };
+              }
+
+              var getColUpdater = function(_colValues, col) {
+                var attr, filters, i;
+                filters = {};
+                for (i in colAttrs) {
+                  if (!hasProp.call(colAttrs, i)) continue;
+                  attr = colAttrs[i];
+                  if (_colValues[i] != null) {
+                    filters[attr] = _colValues[i];
+                  }
+                }
+
+                for (i in alterKeyOrder)
+                {
+                  if (colKeysAlter[i].altered_index < 0) continue;
+                  var sum = 0;
+                  var record_count = 0;
+                  pivotData.forEachMatchingRecord(filters, function(record) {
+                    sum += parseInt(record[alterKeyOrder[i].value_key]);
+                    record_count++;
+                  });
+                  var col_i = parseInt(col);
+                  colKeys[col_i].push(col_i);
+                  colKeysAlter[i].original_values[col_i] = colKeys[col_i][colKeysAlter[i].altered_index];
+                  colKeys[col_i][colKeysAlter[i].altered_index] = (sum / record_count);
+                }
+              };
+
+              for (col in colKeys)
+              {
+                getColUpdater(colKeys[col], col);
+              }
+              colKeys.sort(this.arrSort(this.colAttrs));
+
+              for (col in colKeys)
+              {
+                var col_i = parseInt(col);
+                for (i = alterKeyOrder.length-1; i>=0; i--)
+                {
+                  if (colKeysAlter[i].altered_index < 0) continue;
+                  var col_index = colKeys[col_i].pop();
+                  colKeys[col_i][colKeysAlter[i].altered_index] = colKeysAlter[i].original_values[col_index];
+                }
+              }
+              return colKeys;
           }
         }
       };
@@ -1140,6 +1253,7 @@
         vals: [],
         rowOrder: "key_a_to_z",
         colOrder: "key_a_to_z",
+        alterKeyOrder: [],
         dataClass: PivotData,
         filter: function() {
           return true;
@@ -1211,6 +1325,7 @@
         vals: [],
         rowOrder: "key_a_to_z",
         colOrder: "key_a_to_z",
+        alterKeyOrder: [],
         dataClass: PivotData,
         exclusions: {},
         inclusions: {},
@@ -1586,6 +1701,7 @@
             }
             subopts.aggregatorName = aggregator.val();
             subopts.vals = vals;
+            subopts.alterKeyOrder = opts.alterKeyOrder;
             subopts.aggregator = opts.aggregators[aggregator.val()](vals);
             subopts.renderer = opts.renderers[renderer.val()];
             subopts.rowOrder = rowOrderArrow.data("order");
